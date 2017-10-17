@@ -138,16 +138,85 @@ class ViewController: UIViewController {
                     self.photoImageView = nil;
                 }
             }
+            
+            guard(error == nil) else {
+                displayError(error: "Houve um erro na sua requisição: \(String(describing: error))");
+                return;
+            }
+            
+            guard let statusCode = (response as? HTTPURLResponse)?.statusCode, statusCode >= 200 && statusCode <= 299 else {
+                displayError(error: "Sua requisição retornou um código diferente de 2xx!");
+                return;
+            }
+            
+            guard let data = data else {
+                displayError(error: "Nenhum dado retornado pela sua requisição!");
+                return;
+            }
+            
+            let parsedResult: [String:AnyObject]!
+            do {
+                parsedResult = try JSONSerialization.jsonObject(with: data, options: .allowFragments) as! [String:AnyObject]
+            } catch {
+                displayError(error: "Não é possível converter os dados para JSON: '\(data)'");
+                return;
+            }
+            
+            guard let stat = parsedResult[Constants.FlickrResponseKeys.Status] as? String, stat == Constants.FlickrResponseValues.OKStatus else {
+                displayError(error: "Flickr API returned an error. See error code and message in \(parsedResult)")
+                return
+            }
+            
+            guard let photosDictionary = parsedResult[Constants.FlickrResponseKeys.Photos] as? [String: AnyObject],
+                let photoArray = photosDictionary[Constants.FlickrResponseKeys.Photo] as? [[String:AnyObject]] else {
+                    
+                    displayError(error: "Cannot find keys '\(Constants.FlickrResponseKeys.Photos)' and '\(Constants.FlickrResponseKeys.Photo)' in \(parsedResult)");
+                    return;
+            }
+            
+            let randomPhotoIndex = Int(arc4random_uniform(UInt32(photoArray.count)));
+            
+            guard let urlPhoto = photoArray[randomPhotoIndex][Constants.FlickrResponseKeys.MediumURL] as? String,
+                let tituloPhoto = photoArray[randomPhotoIndex][Constants.FlickrResponseKeys.Title] as? String else {
+                    displayError(error: "Cannot find key '\(Constants.FlickrResponseKeys.MediumURL)'");
+                    return;
+                    
+            }
+            
             if error == nil {
-                print(data!);
+                self.carregarImagem(url: urlPhoto, titulo: tituloPhoto);
+                print(urlPhoto);
+                print(tituloPhoto);
             } else {
                 print(error!.localizedDescription);
             }
             
         }
         task.resume();
+    }
+    
+    private func carregarImagem(url: String, titulo: String) {
+        let imageURL = URL(string: url)!
         
-        // TODO: Make request to Flickr!
+        //        let task = URLSession.shared.dataTask(with: imageURL) {(data, response, error) in
+        //guard if usuario?.endereco?.pais?.estado?.cidade? == "recife"
+        //            print("task finished");
+        //
+        //            if error == nil{
+        //                let downloadedImage = UIImage(data: data!);
+        
+        if let imageData = try? Data(contentsOf: imageURL){
+            
+            performUIUpdatesOnMain {
+                //self.photoImageView.image = downloadedImage;
+                self.photoImageView.image = UIImage(data: imageData);
+                self.photoTitleLabel.text = titulo;
+                self.setUIEnabled(true);
+            }
+        }
+        
+        //        task.resume();
+        
     }
     
     // MARK: Helper for Creating a URL from Parameters
